@@ -30,6 +30,7 @@ async function run() {
 
     const menuConllection = client.db('bistroDb').collection('menu')
     const reviewConllection = client.db('bistroDb').collection('reviews')
+    const cartConllection = client.db('bistroDb').collection('carts')
 
 
     app.get('/menu', async (req, res) => {
@@ -39,6 +40,25 @@ async function run() {
     app.get('/reviews', async (req, res) => {
         const result = await reviewConllection.find().toArray();
         res.send(result);
+    })
+    
+    
+    //data load by email
+    app.get('/carts', async (req, res) => {
+      const email = req.query.email;
+      if(!email){
+        return ([]);
+      }
+      const query = {email: email}
+      const result = await cartConllection.find(query).toArray();
+      res.send(result);
+    })
+
+    //single item post
+    app.post('/carts', async (req, res) => {
+      const item = req.body;
+      const result = await cartConllection.insertOne(item);
+      res.send(result);
     })
 
     // Send a ping to confirm a successful connection
