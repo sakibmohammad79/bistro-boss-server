@@ -2,6 +2,7 @@ const express = require("express");
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const cors = require("cors");
+const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 require('dotenv').config()
 
@@ -28,36 +29,71 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
-    const menuConllection = client.db('bistroDb').collection('menu')
-    const reviewConllection = client.db('bistroDb').collection('reviews')
-    const cartConllection = client.db('bistroDb').collection('carts')
+    const userCollection = client.db('bistroDb').collection('users')
+    const menuCollection = client.db('bistroDb').collection('menu')
+    const reviewCollection = client.db('bistroDb').collection('reviews')
+    const cartCollection = client.db('bistroDb').collection('carts')
+    //get all non powerful user
+    app.get('/users', async (req, res)=> {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    })
 
+    //user info post related
+    app.post('/users', async (req, res) => {
+      const user = req.body;
+      console.log(user);
+      const query = {email: user.email}
+      const existingUser = await userCollection.findOne(query);
+      console.log('existing user', existingUser);
+      if(existingUser){
+        return res.send({message: 'Already Have An Same Account'})
+      }
+      const result = await userCollection.insertOne(user);
+      console.log(result);
+      res.send(result);
+    })
 
+    //user role
+    app.patch('/users/admin/:id', async (req,res) => {
+      const id = req.params.id;
+      const filter ={_id: new ObjectId(id)};
+      const updateDoc = {
+        $set: {
+          role: 'admin'
+        }
+      };
+      const result = await userCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    })
+
+    //menu related
     app.get('/menu', async (req, res) => {
-        const result = await menuConllection.find().toArray();
+        const result = await menuCollection.find().toArray();
         res.send(result);
     })
+    //reviews related
     app.get('/reviews', async (req, res) => {
-        const result = await reviewConllection.find().toArray();
+        const result = await reviewCollection.find().toArray();
         res.send(result);
     })
     
     
-    //data load by email
+    //data load by email table related
     app.get('/carts', async (req, res) => {
       const email = req.query.email;
       if(!email){
         return ([]);
       }
       const query = {email: email}
-      const result = await cartConllection.find(query).toArray();
+      const result = await cartCollection.find(query).toArray();
       res.send(result);
     })
 
-    //single item post
+    //single item post item related
     app.post('/carts', async (req, res) => {
       const item = req.body;
-      const result = await cartConllection.insertOne(item);
+      const result = await cartCollection.insertOne(item);
       res.send(result);
     })
 
@@ -65,7 +101,7 @@ async function run() {
     app.delete('/carts/:id', async(req, res)=> {
       const id = req.params.id;
       const query = {_id: new ObjectId(id)}
-      const result = await cartConllection.deleteOne(query);
+      const result = await cartCollection.deleteOne(query);
       res.send(result);
     })
 
