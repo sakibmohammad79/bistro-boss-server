@@ -10,10 +10,28 @@ require('dotenv').config()
 app.use(cors());
 app.use(express.json());
 
+const verifyJwt = (req, res, next) => {
+  const authorization = req.headers.authorization;
+  console.log('authorizition', authorization);
+  if(!authorization){
+    
+    return res.status(401).send({error: true, message: 'unauthoraized access'});
+  }
+  const token = authorization.split(' ')[1];
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if(err){
+      return res.status(401).send({error: true, message: 'unauthorzed access'});
+    }
+    req.decoded= decoded;
+    next();
+  })
+}
+
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.5a8lj4m.mongodb.net/?retryWrites=true&w=majority`;
-console.log(uri)
+//console.log(uri)
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -33,14 +51,32 @@ async function run() {
     const menuCollection = client.db('bistroDb').collection('menu')
     const reviewCollection = client.db('bistroDb').collection('reviews')
     const cartCollection = client.db('bistroDb').collection('carts')
-    //get all non powerful user
-    app.get('/users', async (req, res)=> {
+
+    //jwt
+    app.post('/jwt', (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+      res.send({token});
+    })
+
+    const verifyAdmin = async(req, res, next)=>{
+      const email = req.decoded.email;
+      const query = {email: email};
+      const user = await userCollection.findOne(query);
+      if(user?.role !== 'admin'){
+        return res.status(403).send({error: true, meassage: 'fobidden message'})
+      }
+      next();
+    }
+
+     //get all non powerful user
+     app.get('/users', verifyJwt, verifyAdmin, async (req, res)=> {
       const result = await userCollection.find().toArray();
       res.send(result);
     })
 
     //user info post related
-    app.post('/users', async (req, res) => {
+    app.post('/users', verifyJwt, async (req, res) => {
       const user = req.body;
       console.log(user);
       const query = {email: user.email}
@@ -51,6 +87,18 @@ async function run() {
       }
       const result = await userCollection.insertOne(user);
       console.log(result);
+      res.send(result);
+    })
+
+    //
+    app.get('/users/admin/:email', verifyJwt, async(req, res)=>{
+      const email = req.params.email;
+      if(req.decoded.email !== email){
+        res.send({admin: false});
+      }
+      const query = {email : email};
+      const user = await userCollection.findOne(query);
+      const result = {admin: user?.role === 'admin'}
       res.send(result);
     })
 
@@ -80,11 +128,17 @@ async function run() {
     
     
     //data load by email table related
-    app.get('/carts', async (req, res) => {
+    app.get('/carts', verifyJwt, async (req, res) => {
       const email = req.query.email;
       if(!email){
         return ([]);
       }
+
+      const decodedEmail = req.decoded.email;
+      if(email !== decodedEmail){
+        return res.status(403).send({error:true, meassage: 'porvidden access'});
+      }
+
       const query = {email: email}
       const result = await cartCollection.find(query).toArray();
       res.send(result);
