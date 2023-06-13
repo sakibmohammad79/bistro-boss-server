@@ -2,21 +2,57 @@ const express = require("express");
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const cors = require("cors");
+const nodemailer = require("nodemailer");
+const mg = require('nodemailer-mailgun-transport');
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 require('dotenv').config()
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 
-app.use(cors());
-app.use(express.json());
-
-
-
-
 //set meddlewar
 app.use(cors());
 app.use(express.json());
+
+// let transporter = nodemailer.createTransport({
+//   host: 'smtp.sendgrid.net',
+//   port: 587,
+//   auth: {
+//       user: "apikey",
+//       pass: process.env.SENDGRID_API_KEY
+//   }
+// })
+
+const auth = {
+  auth: {
+    api_key: process.envEMAIL_PRIVATE_KEY,
+    domain: process.env.EMAIL_DOMAIN
+  }
+}
+
+const transporter = nodemailer.createTransport(mg(auth));
+
+const sendPaymentConfirmationEmail = (payment) => {
+  transporter.sendMail({
+    from: "mohammadsakib7679@gmail.com", // verified sender email
+    to: payment.email, // recipient email
+    subject: "Test message subject", // Subject line
+    text: "Hello world!", // plain text body
+    html: `
+    <div>
+        <h2>payment Confirmed</h2>
+    </div>
+    `, // html body
+  }, function(error, info){
+    if (error) {
+      console.log(error);
+    } else {
+      console.log('Email sent: ' + info.response);
+    }
+  });
+ 
+}
+
 
 const verifyJwt = (req, res, next) => {
   const authorization = req.headers.authorization;
@@ -204,6 +240,9 @@ async function run() {
       
       const query = {_id: {$in: payment.cartItems.map(id => new ObjectId(id))}}
       const deleteResult = await cartCollection.deleteMany(query)
+
+      //send emailconfirmation
+      sendPaymentConfirmationEmail(payment);
 
       res.send({insertResult, deleteResult});
     })
